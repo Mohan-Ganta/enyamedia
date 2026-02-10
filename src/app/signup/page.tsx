@@ -60,12 +60,9 @@ export default function SignupPage() {
     if (success) {
         return (
             <MainLayout>
-                <div
-                    className="min-h-screen w-full flex items-center justify-center bg-cover bg-center relative"
-                style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?q=80&w=2069&auto=format&fit=crop")' }}
-            >
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-                <div className="z-10 bg-black/80 p-8 md:p-16 rounded-lg w-full max-w-md shadow-2xl border border-white/10 text-center">
+                <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-800 relative">
+                    <div className="absolute inset-0 bg-black/20" />
+                    <div className="z-10 bg-black/90 p-8 md:p-16 rounded-lg w-full max-w-md shadow-2xl border border-gray-700/50 backdrop-blur-sm text-center">
                     <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                         <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -82,13 +79,10 @@ export default function SignupPage() {
 
     return (
         <MainLayout>
-            <div
-                className="min-h-screen w-full flex items-center justify-center bg-cover bg-center relative"
-            style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?q=80&w=2069&auto=format&fit=crop")' }}
-        >
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-800 relative">
+                <div className="absolute inset-0 bg-black/20" />
 
-            <div className="z-10 bg-black/80 p-8 md:p-16 rounded-lg w-full max-w-md shadow-2xl border border-white/10">
+                <div className="z-10 bg-black/90 p-8 md:p-16 rounded-lg w-full max-w-md shadow-2xl border border-gray-700/50 backdrop-blur-sm">
                 <h1 className="text-3xl font-bold text-white mb-8">Sign Up</h1>
 
                 {error && (
