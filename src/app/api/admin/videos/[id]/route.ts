@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getCollection, Collections } from '@/lib/mongodb'
 import { verifyToken } from '@/lib/auth'
+import { Video, User, Activity } from '@/lib/types'
+import { ObjectId } from 'mongodb'
 import fs from 'fs'
 import path from 'path'
 
@@ -21,23 +23,34 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const video = await prisma.video.findUnique({
-      where: { id },
-      include: {
-        uploader: {
-          select: {
-            name: true,
-            email: true
-          }
-        }
-      }
-    })
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    const usersCollection = await getCollection(Collections.USERS)
+
+    const video = await videosCollection.findOne({
+      _id: new ObjectId(id)
+    }) as Video | null
 
     if (!video) {
       return NextResponse.json({ error: 'Video not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ video })
+    // Get uploader information
+    const uploader = await usersCollection.findOne(
+      { _id: video.uploadedBy },
+      { projection: { name: 1, email: 1 } }
+    ) as Pick<User, 'name' | 'email'> | null
+
+    const videoWithUploader = {
+      ...video,
+      _id: video._id!.toString(),
+      uploadedBy: video.uploadedBy.toString(),
+      uploader: uploader ? {
+        name: uploader.name,
+        email: uploader.email
+      } : null
+    }
+
+    return NextResponse.json({ video: videoWithUploader })
   } catch (error) {
     console.error('Get video error:', error)
     return NextResponse.json(
@@ -67,46 +80,67 @@ export async function PATCH(
     const body = await request.json()
     const { title, description, category, isPublic, isFeatured } = body
 
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    const usersCollection = await getCollection(Collections.USERS)
+    const activitiesCollection = await getCollection(Collections.ACTIVITIES)
+
     // Check if video exists
-    const existingVideo = await prisma.video.findUnique({
-      where: { id }
-    })
+    const existingVideo = await videosCollection.findOne({
+      _id: new ObjectId(id)
+    }) as Video | null
 
     if (!existingVideo) {
       return NextResponse.json({ error: 'Video not found' }, { status: 404 })
     }
 
     // Update video
-    const updatedVideo = await prisma.video.update({
-      where: { id },
-      data: {
-        ...(title !== undefined && { title }),
-        ...(description !== undefined && { description }),
-        ...(category !== undefined && { category }),
-        ...(isPublic !== undefined && { isPublic }),
-        ...(isFeatured !== undefined && { isFeatured }),
-      },
-      include: {
-        uploader: {
-          select: {
-            name: true,
-            email: true
-          }
-        }
-      }
-    })
+    const updateData: any = {
+      updatedAt: new Date()
+    }
+    
+    if (title !== undefined) updateData.title = title
+    if (description !== undefined) updateData.description = description
+    if (category !== undefined) updateData.category = category
+    if (isPublic !== undefined) updateData.isPublic = isPublic
+    if (isFeatured !== undefined) updateData.isFeatured = isFeatured
+
+    await videosCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    )
+
+    // Get updated video with uploader info
+    const updatedVideo = await videosCollection.findOne({
+      _id: new ObjectId(id)
+    }) as Video
+
+    const uploader = await usersCollection.findOne(
+      { _id: updatedVideo.uploadedBy },
+      { projection: { name: 1, email: 1 } }
+    ) as Pick<User, 'name' | 'email'> | null
 
     // Log activity
-    await prisma.activity.create({
-      data: {
-        type: 'VIDEO_UPDATED',
-        message: `Video "${updatedVideo.title}" was updated`,
-        userId: decoded.userId,
-        videoId: updatedVideo.id
-      }
-    })
+    const activity: Omit<Activity, '_id'> = {
+      type: 'VIDEO_UPDATED',
+      message: `Video "${updatedVideo.title}" was updated`,
+      userId: new ObjectId(decoded.userId),
+      videoId: new ObjectId(id),
+      createdAt: new Date()
+    }
 
-    return NextResponse.json({ video: updatedVideo })
+    await activitiesCollection.insertOne(activity)
+
+    const videoWithUploader = {
+      ...updatedVideo,
+      _id: updatedVideo._id!.toString(),
+      uploadedBy: updatedVideo.uploadedBy.toString(),
+      uploader: uploader ? {
+        name: uploader.name,
+        email: uploader.email
+      } : null
+    }
+
+    return NextResponse.json({ video: videoWithUploader })
   } catch (error) {
     console.error('Update video error:', error)
     return NextResponse.json(
@@ -133,10 +167,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    const activitiesCollection = await getCollection(Collections.ACTIVITIES)
+
     // Check if video exists
-    const existingVideo = await prisma.video.findUnique({
-      where: { id }
-    })
+    const existingVideo = await videosCollection.findOne({
+      _id: new ObjectId(id)
+    }) as Video | null
 
     if (!existingVideo) {
       return NextResponse.json({ error: 'Video not found' }, { status: 404 })
@@ -163,18 +200,19 @@ export async function DELETE(
     }
 
     // Delete video from database
-    await prisma.video.delete({
-      where: { id }
+    await videosCollection.deleteOne({
+      _id: new ObjectId(id)
     })
 
     // Log activity
-    await prisma.activity.create({
-      data: {
-        type: 'VIDEO_DELETED',
-        message: `Video "${existingVideo.title}" was deleted`,
-        userId: decoded.userId
-      }
-    })
+    const activity: Omit<Activity, '_id'> = {
+      type: 'VIDEO_DELETED',
+      message: `Video "${existingVideo.title}" was deleted`,
+      userId: new ObjectId(decoded.userId),
+      createdAt: new Date()
+    }
+
+    await activitiesCollection.insertOne(activity)
 
     return NextResponse.json({ message: 'Video deleted successfully' })
   } catch (error) {

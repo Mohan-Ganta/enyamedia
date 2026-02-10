@@ -1,104 +1,136 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getCollection, Collections } from '@/lib/mongodb'
 import { requireAuth } from '@/lib/auth'
+import { ObjectId } from 'mongodb'
 
 export async function GET(request: NextRequest) {
   try {
     await requireAuth(request, 'ADMIN')
 
+    const usersCollection = await getCollection(Collections.USERS)
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    const activitiesCollection = await getCollection(Collections.ACTIVITIES)
+
     // Get dashboard statistics
     const [
       totalVideos,
       totalUsers,
-      recentActivities,
+      storageUsage,
       videosByStatus,
       videosByCategory,
-      recentUploads
+      recentActivities,
+      recentUploads,
+      uploadTrends
     ] = await Promise.all([
       // Total videos count
-      prisma.video.count(),
+      videosCollection.countDocuments(),
       
       // Total users count
-      prisma.user.count(),
+      usersCollection.countDocuments(),
       
-      // Recent activities
-      prisma.activity.findMany({
-        take: 10,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: { name: true, email: true }
-          },
-          video: {
-            select: { title: true }
+      // Total storage usage
+      videosCollection.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalSize: { $sum: '$size' }
           }
         }
-      }),
+      ]).toArray(),
       
       // Videos by status
-      prisma.video.groupBy({
-        by: ['status'],
-        _count: { status: true }
-      }),
-      
-      // Videos by category
-      prisma.video.groupBy({
-        by: ['category'],
-        _count: { category: true },
-        where: {
-          category: { not: null }
-        }
-      }),
-      
-      // Recent uploads
-      prisma.video.findMany({
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          uploader: {
-            select: { name: true, email: true }
+      videosCollection.aggregate([
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 }
           }
         }
-      })
+      ]).toArray(),
+      
+      // Videos by category
+      videosCollection.aggregate([
+        {
+          $match: { category: { $ne: null } }
+        },
+        {
+          $group: {
+            _id: '$category',
+            count: { $sum: 1 }
+          }
+        }
+      ]).toArray(),
+      
+      // Recent activities (last 10)
+      activitiesCollection.find({})
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .toArray(),
+      
+      // Recent uploads (last 5)
+      videosCollection.find({})
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .toArray(),
+      
+      // Upload trends (last 7 days)
+      videosCollection.aggregate([
+        {
+          $match: {
+            createdAt: {
+              $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: '$createdAt'
+              }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { _id: 1 }
+        }
+      ]).toArray()
     ])
 
-    // Calculate storage usage
-    const storageUsage = await prisma.video.aggregate({
-      _sum: { size: true }
-    })
-
-    // Get upload trends (last 7 days)
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    
-    const uploadTrends = await prisma.video.groupBy({
-      by: ['createdAt'],
-      _count: { id: true },
-      where: {
-        createdAt: { gte: sevenDaysAgo }
-      }
-    })
+    const totalStorage = storageUsage[0]?.totalSize || 0
+    const activeUploads = videosByStatus.find((item: any) => item._id === 'PROCESSING')?.count || 0
 
     return NextResponse.json({
       stats: {
         totalVideos,
         totalUsers,
-        totalStorage: storageUsage._sum.size || 0,
-        activeUploads: videosByStatus.find((s: any) => s.status === 'PROCESSING')?._count.status || 0
+        totalStorage,
+        activeUploads
       },
       videosByStatus: videosByStatus.map((item: any) => ({
-        status: item.status,
-        count: item._count.status
+        status: item._id,
+        count: item.count
       })),
       videosByCategory: videosByCategory.map((item: any) => ({
-        category: item.category,
-        count: item._count.category
+        category: item._id,
+        count: item.count
       })),
-      recentActivities,
-      recentUploads,
+      recentActivities: recentActivities.map((activity: any) => ({
+        ...activity,
+        _id: activity._id.toString(),
+        userId: activity.userId?.toString(),
+        videoId: activity.videoId?.toString()
+      })),
+      recentUploads: recentUploads.map((video: any) => ({
+        ...video,
+        _id: video._id.toString(),
+        uploadedBy: video.uploadedBy.toString()
+      })),
       uploadTrends: uploadTrends.map((item: any) => ({
-        date: item.createdAt,
-        count: item._count.id
+        date: item._id,
+        count: item.count
       }))
     })
   } catch (error) {

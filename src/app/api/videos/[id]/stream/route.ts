@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getCollection, Collections } from '@/lib/mongodb'
+import { Video } from '@/lib/types'
 import { readFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
+import { ObjectId } from 'mongodb'
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -22,10 +24,12 @@ export async function GET(
   try {
     const { id } = await params
     
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    
     // Get video from database
-    const video = await prisma.video.findUnique({
-      where: { id }
-    })
+    const video = await videosCollection.findOne({
+      _id: new ObjectId(id)
+    }) as Video | null
 
     if (!video) {
       return NextResponse.json(

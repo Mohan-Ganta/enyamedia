@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getCollection, Collections } from '@/lib/mongodb'
 import { requireAuth } from '@/lib/auth'
+import { Video, User, Activity } from '@/lib/types'
+import { ObjectId } from 'mongodb'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,44 +15,59 @@ export async function GET(request: NextRequest) {
     
     const skip = (page - 1) * limit
 
-    const where: any = {}
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    const usersCollection = await getCollection(Collections.USERS)
+
+    const filter: any = {}
     
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
       ]
     }
     
     if (category) {
-      where.category = category
+      filter.category = category
     }
     
     if (status) {
-      where.status = status
+      filter.status = status
     }
 
     const [videos, total] = await Promise.all([
-      prisma.video.findMany({
-        where,
-        include: {
-          uploader: {
-            select: {
-              id: true,
-              name: true,
-              email: true
-            }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit
-      }),
-      prisma.video.count({ where })
+      videosCollection
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray() as Promise<Video[]>,
+      videosCollection.countDocuments(filter)
     ])
 
+    // Get uploader information for each video
+    const videosWithUploaders = await Promise.all(
+      videos.map(async (video) => {
+        const uploader = await usersCollection.findOne(
+          { _id: video.uploadedBy },
+          { projection: { _id: 1, name: 1, email: 1 } }
+        ) as Pick<User, '_id' | 'name' | 'email'> | null
+
+        return {
+          ...video,
+          _id: video._id!.toString(),
+          uploadedBy: video.uploadedBy.toString(),
+          uploader: uploader ? {
+            id: uploader._id!.toString(),
+            name: uploader.name,
+            email: uploader.email
+          } : null
+        }
+      })
+    )
+
     return NextResponse.json({
-      videos,
+      videos: videosWithUploaders,
       pagination: {
         page,
         limit,
@@ -80,9 +97,12 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    const video = await prisma.video.findUnique({
-      where: { id: videoId }
-    })
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    const activitiesCollection = await getCollection(Collections.ACTIVITIES)
+
+    const video = await videosCollection.findOne({
+      _id: new ObjectId(videoId)
+    }) as Video | null
 
     if (!video) {
       return NextResponse.json(
@@ -92,20 +112,26 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Update status to DELETED instead of actually deleting
-    await prisma.video.update({
-      where: { id: videoId },
-      data: { status: 'DELETED' }
-    })
+    await videosCollection.updateOne(
+      { _id: new ObjectId(videoId) },
+      { 
+        $set: { 
+          status: 'DELETED',
+          updatedAt: new Date()
+        } 
+      }
+    )
 
     // Log activity
-    await prisma.activity.create({
-      data: {
-        type: 'VIDEO_DELETE',
-        message: `Video deleted: ${video.title}`,
-        userId: user.userId,
-        videoId: video.id
-      }
-    })
+    const activity: Omit<Activity, '_id'> = {
+      type: 'VIDEO_DELETE',
+      message: `Video deleted: ${video.title}`,
+      userId: new ObjectId(user.userId),
+      videoId: new ObjectId(videoId),
+      createdAt: new Date()
+    }
+
+    await activitiesCollection.insertOne(activity)
 
     return NextResponse.json({ message: 'Video deleted successfully' })
   } catch (error) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getCollection, Collections } from '@/lib/mongodb'
 import { requireAuth } from '@/lib/auth'
+import { User, Activity } from '@/lib/types'
+import { ObjectId } from 'mongodb'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,43 +16,54 @@ export async function GET(request: NextRequest) {
     
     const skip = (page - 1) * limit
 
-    const where: any = {}
+    const usersCollection = await getCollection(Collections.USERS)
+    const videosCollection = await getCollection(Collections.VIDEOS)
+
+    const filter: any = {}
     
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } }
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
       ]
     }
     
     if (role) {
-      where.role = role
+      filter.role = role
     }
 
     const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          createdAt: true,
-          _count: {
-            select: {
-              videos: true
-            }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit
-      }),
-      prisma.user.count({ where })
+      usersCollection
+        .find(filter, { projection: { password: 0 } }) // Exclude password
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray() as Promise<User[]>,
+      usersCollection.countDocuments(filter)
     ])
 
+    // Get video count for each user
+    const usersWithCounts = await Promise.all(
+      users.map(async (user) => {
+        const videoCount = await videosCollection.countDocuments({
+          uploadedBy: user._id
+        })
+
+        return {
+          id: user._id!.toString(),
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          createdAt: user.createdAt,
+          _count: {
+            videos: videoCount
+          }
+        }
+      })
+    )
+
     return NextResponse.json({
-      users,
+      users: usersWithCounts,
       pagination: {
         page,
         limit,
@@ -95,29 +108,60 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { role },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true
+    const usersCollection = await getCollection(Collections.USERS)
+    const activitiesCollection = await getCollection(Collections.ACTIVITIES)
+
+    // Update user role
+    const result = await usersCollection.updateOne(
+      { _id: new ObjectId(userId) },
+      { 
+        $set: { 
+          role: role as 'USER' | 'ADMIN' | 'SUPER_ADMIN',
+          updatedAt: new Date()
+        } 
       }
-    })
+    )
+
+    if (result.matchedCount === 0) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      )
+    }
+
+    // Get updated user
+    const user = await usersCollection.findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { password: 0 } }
+    ) as User | null
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      )
+    }
 
     // Log activity
-    await prisma.activity.create({
-      data: {
-        type: 'ADMIN_ACTION',
-        message: `User role updated: ${user.email} -> ${role}`,
-        userId: adminUser.userId,
-        metadata: JSON.stringify({ targetUserId: userId, newRole: role })
+    const activity: Omit<Activity, '_id'> = {
+      type: 'ADMIN_ACTION',
+      message: `User role updated: ${user.email} -> ${role}`,
+      userId: new ObjectId(adminUser.userId),
+      metadata: JSON.stringify({ targetUserId: userId, newRole: role }),
+      createdAt: new Date()
+    }
+
+    await activitiesCollection.insertOne(activity)
+
+    return NextResponse.json({ 
+      user: {
+        id: user._id!.toString(),
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt
       }
     })
-
-    return NextResponse.json({ user })
   } catch (error) {
     console.error('Update user error:', error)
     

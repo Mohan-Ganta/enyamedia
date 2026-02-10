@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getCollection, Collections } from '@/lib/mongodb'
 import { verifyPassword, generateToken } from '@/lib/auth'
+import { User, Activity } from '@/lib/types'
+import { ObjectId } from 'mongodb'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,9 +15,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email }
-    })
+    const usersCollection = await getCollection(Collections.USERS)
+    const activitiesCollection = await getCollection(Collections.ACTIVITIES)
+
+    const user = await usersCollection.findOne({ email }) as User | null
 
     if (!user || !(await verifyPassword(password, user.password))) {
       return NextResponse.json(
@@ -25,23 +28,24 @@ export async function POST(request: NextRequest) {
     }
 
     const token = generateToken({
-      userId: user.id,
+      userId: user._id!.toString(),
       email: user.email,
       role: user.role
     })
 
     // Log activity
-    await prisma.activity.create({
-      data: {
-        type: 'USER_LOGIN',
-        message: `User ${user.email} logged in`,
-        userId: user.id
-      }
-    })
+    const activity: Omit<Activity, '_id'> = {
+      type: 'USER_LOGIN',
+      message: `User ${user.email} logged in`,
+      userId: user._id,
+      createdAt: new Date()
+    }
+    
+    await activitiesCollection.insertOne(activity)
 
     const response = NextResponse.json({
       user: {
-        id: user.id,
+        id: user._id!.toString(),
         email: user.email,
         name: user.name,
         role: user.role

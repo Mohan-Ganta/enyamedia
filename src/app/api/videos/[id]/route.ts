@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getCollection, Collections } from '@/lib/mongodb'
 import { requireAuth } from '@/lib/auth'
+import { Video, User, Activity } from '@/lib/types'
+import { ObjectId } from 'mongodb'
 
 export async function GET(
   request: NextRequest,
@@ -8,18 +10,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const video = await prisma.video.findUnique({
-      where: { id },
-      include: {
-        uploader: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
-      }
-    })
+    
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    const usersCollection = await getCollection(Collections.USERS)
+    
+    const video = await videosCollection.findOne({
+      _id: new ObjectId(id)
+    }) as Video | null
 
     if (!video) {
       return NextResponse.json(
@@ -28,13 +25,34 @@ export async function GET(
       )
     }
 
-    // Increment view count
-    await prisma.video.update({
-      where: { id },
-      data: { views: { increment: 1 } }
-    })
+    // Get uploader information
+    const uploader = await usersCollection.findOne(
+      { _id: video.uploadedBy },
+      { projection: { _id: 1, name: 1, email: 1 } }
+    ) as Pick<User, '_id' | 'name' | 'email'> | null
 
-    return NextResponse.json({ video })
+    // Increment view count
+    await videosCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { 
+        $inc: { views: 1 },
+        $set: { updatedAt: new Date() }
+      }
+    )
+
+    const videoWithUploader = {
+      ...video,
+      _id: video._id!.toString(),
+      uploadedBy: video.uploadedBy.toString(),
+      views: video.views + 1, // Return updated view count
+      uploader: uploader ? {
+        id: uploader._id!.toString(),
+        name: uploader.name,
+        email: uploader.email
+      } : null
+    }
+
+    return NextResponse.json({ video: videoWithUploader })
   } catch (error) {
     console.error('Get video error:', error)
     return NextResponse.json(
@@ -53,9 +71,13 @@ export async function PUT(
     const { id } = await params
     const { title, description, category, tags, isPublic } = await request.json()
 
-    const video = await prisma.video.findUnique({
-      where: { id }
-    })
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    const usersCollection = await getCollection(Collections.USERS)
+    const activitiesCollection = await getCollection(Collections.ACTIVITIES)
+
+    const video = await videosCollection.findOne({
+      _id: new ObjectId(id)
+    }) as Video | null
 
     if (!video) {
       return NextResponse.json(
@@ -65,44 +87,62 @@ export async function PUT(
     }
 
     // Check if user owns the video or is admin
-    if (video.uploadedBy !== user.userId && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+    if (video.uploadedBy.toString() !== user.userId && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }
       )
     }
 
-    const updatedVideo = await prisma.video.update({
-      where: { id },
-      data: {
-        title,
-        description,
-        category,
-        tags,
-        isPublic
-      },
-      include: {
-        uploader: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
-      }
-    })
+    // Update video
+    const updateData: any = {
+      updatedAt: new Date()
+    }
+    
+    if (title !== undefined) updateData.title = title
+    if (description !== undefined) updateData.description = description
+    if (category !== undefined) updateData.category = category
+    if (tags !== undefined) updateData.tags = tags
+    if (isPublic !== undefined) updateData.isPublic = isPublic
+
+    await videosCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    )
+
+    // Get updated video with uploader info
+    const updatedVideo = await videosCollection.findOne({
+      _id: new ObjectId(id)
+    }) as Video
+
+    const uploader = await usersCollection.findOne(
+      { _id: updatedVideo.uploadedBy },
+      { projection: { _id: 1, name: 1, email: 1 } }
+    ) as Pick<User, '_id' | 'name' | 'email'> | null
 
     // Log activity
-    await prisma.activity.create({
-      data: {
-        type: 'VIDEO_UPDATE',
-        message: `Video updated: ${title}`,
-        userId: user.userId,
-        videoId: video.id
-      }
-    })
+    const activity: Omit<Activity, '_id'> = {
+      type: 'VIDEO_UPDATE',
+      message: `Video updated: ${title || updatedVideo.title}`,
+      userId: new ObjectId(user.userId),
+      videoId: new ObjectId(id),
+      createdAt: new Date()
+    }
 
-    return NextResponse.json({ video: updatedVideo })
+    await activitiesCollection.insertOne(activity)
+
+    const videoWithUploader = {
+      ...updatedVideo,
+      _id: updatedVideo._id!.toString(),
+      uploadedBy: updatedVideo.uploadedBy.toString(),
+      uploader: uploader ? {
+        id: uploader._id!.toString(),
+        name: uploader.name,
+        email: uploader.email
+      } : null
+    }
+
+    return NextResponse.json({ video: videoWithUploader })
   } catch (error) {
     console.error('Update video error:', error)
     

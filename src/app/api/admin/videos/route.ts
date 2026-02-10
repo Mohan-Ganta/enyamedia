@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getCollection, Collections } from '@/lib/mongodb'
 import { verifyToken } from '@/lib/auth'
+import { Video, User } from '@/lib/types'
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,19 +21,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const videos = await prisma.video.findMany({
-      include: {
-        uploader: {
-          select: {
-            name: true,
-            email: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    })
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    const usersCollection = await getCollection(Collections.USERS)
 
-    return NextResponse.json({ videos })
+    const videos = await videosCollection
+      .find({})
+      .sort({ createdAt: -1 })
+      .toArray() as Video[]
+
+    // Get uploader information for each video
+    const videosWithUploaders = await Promise.all(
+      videos.map(async (video) => {
+        const uploader = await usersCollection.findOne(
+          { _id: video.uploadedBy },
+          { projection: { name: 1, email: 1 } }
+        ) as Pick<User, 'name' | 'email'> | null
+
+        return {
+          ...video,
+          _id: video._id!.toString(),
+          uploadedBy: video.uploadedBy.toString(),
+          uploader: uploader ? {
+            name: uploader.name,
+            email: uploader.email
+          } : null
+        }
+      })
+    )
+
+    return NextResponse.json({ videos: videosWithUploaders })
   } catch (error) {
     console.error('Get admin videos error:', error)
     return NextResponse.json(

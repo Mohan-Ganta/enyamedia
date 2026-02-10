@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getCollection, Collections } from '@/lib/mongodb'
 import { hashPassword, generateToken } from '@/lib/auth'
+import { User, Activity } from '@/lib/types'
+import { ObjectId } from 'mongodb'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,10 +15,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const usersCollection = await getCollection(Collections.USERS)
+    const activitiesCollection = await getCollection(Collections.ACTIVITIES)
+
     // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    })
+    const existingUser = await usersCollection.findOne({ email }) as User | null
 
     if (existingUser) {
       return NextResponse.json(
@@ -27,36 +30,40 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await hashPassword(password)
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-        role: role as any
-      }
-    })
+    const userData: Omit<User, '_id'> = {
+      email,
+      password: hashedPassword,
+      name,
+      role: role as 'USER' | 'ADMIN' | 'SUPER_ADMIN',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+
+    const result = await usersCollection.insertOne(userData)
+    const userId = result.insertedId
 
     const token = generateToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role
+      userId: userId.toString(),
+      email,
+      role
     })
 
     // Log activity
-    await prisma.activity.create({
-      data: {
-        type: 'USER_REGISTER',
-        message: `New user registered: ${user.email}`,
-        userId: user.id
-      }
-    })
+    const activity: Omit<Activity, '_id'> = {
+      type: 'USER_REGISTER',
+      message: `New user registered: ${email}`,
+      userId,
+      createdAt: new Date()
+    }
+    
+    await activitiesCollection.insertOne(activity)
 
     const response = NextResponse.json({
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role
+        id: userId.toString(),
+        email,
+        name,
+        role
       },
       token
     })

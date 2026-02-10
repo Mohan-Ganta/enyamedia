@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getCollection, Collections } from '@/lib/mongodb'
 import { requireAuth } from '@/lib/auth'
 import { saveFile, generateThumbnail, generateUniqueFilename, isValidVideoFile } from '@/lib/upload'
+import { Video, Activity } from '@/lib/types'
+import { ObjectId } from 'mongodb'
 
 export async function POST(request: NextRequest) {
   try {
@@ -96,8 +98,11 @@ export async function POST(request: NextRequest) {
       console.log('Thumbnail generated:', thumbnailPath)
     }
 
-    // Create video record in database (temporarily without isFeatured)
-    const videoData: any = {
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    const activitiesCollection = await getCollection(Collections.ACTIVITIES)
+
+    // Create video record in database
+    const videoData: Omit<Video, '_id'> = {
       title: title.trim(),
       description: description.trim(),
       filename,
@@ -105,54 +110,51 @@ export async function POST(request: NextRequest) {
       mimeType: file.type,
       size: file.size,
       thumbnail: thumbnailPath,
-      category: category.trim() || null,
-      tags: tags.trim() || null,
+      category: category.trim() || undefined,
+      tags: tags.trim() || undefined,
       isPublic,
-      uploadedBy: user.userId,
-      status: 'READY'
+      isFeatured,
+      uploadedBy: new ObjectId(user.userId),
+      status: 'READY',
+      views: 0,
+      likes: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
     
     console.log('Creating video record with data:', videoData)
     
-    const video = await prisma.video.create({
-      data: videoData
-    })
+    const result = await videosCollection.insertOne(videoData)
+    const videoId = result.insertedId
 
-    // Update with isFeatured field if needed
-    if (isFeatured && !videoData.isFeatured) {
-      await prisma.video.update({
-        where: { id: video.id },
-        data: { isFeatured: true }
-      })
-    }
-
-    console.log('Video record created:', video.id)
+    console.log('Video record created:', videoId.toString())
 
     // Log activity
-    await prisma.activity.create({
-      data: {
-        type: 'VIDEO_UPLOAD',
-        message: `Video uploaded: ${title}${isFeatured ? ' (Featured)' : ''}`,
-        userId: user.userId,
-        videoId: video.id,
-        metadata: JSON.stringify({
-          filename,
-          size: file.size,
-          mimeType: file.type,
-          hasCoverImage: !!coverImageFile,
-          isFeatured
-        })
-      }
-    })
+    const activity: Omit<Activity, '_id'> = {
+      type: 'VIDEO_UPLOAD',
+      message: `Video uploaded: ${title}${isFeatured ? ' (Featured)' : ''}`,
+      userId: new ObjectId(user.userId),
+      videoId: videoId,
+      metadata: JSON.stringify({
+        filename,
+        size: file.size,
+        mimeType: file.type,
+        hasCoverImage: !!coverImageFile,
+        isFeatured
+      }),
+      createdAt: new Date()
+    }
+
+    await activitiesCollection.insertOne(activity)
 
     return NextResponse.json({
       video: {
-        id: video.id,
-        title: video.title,
-        description: video.description,
-        thumbnail: video.thumbnail,
-        status: video.status,
-        createdAt: video.createdAt
+        id: videoId.toString(),
+        title: videoData.title,
+        description: videoData.description,
+        thumbnail: videoData.thumbnail,
+        status: videoData.status,
+        createdAt: videoData.createdAt
       }
     })
   } catch (error) {
@@ -172,14 +174,6 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message.includes('ENOENT')) {
       return NextResponse.json(
         { error: 'Failed to save file. Please try again.' },
-        { status: 500 }
-      )
-    }
-
-    // Database errors
-    if (error instanceof Error && error.message.includes('Prisma')) {
-      return NextResponse.json(
-        { error: `Database error: ${error.message}` },
         { status: 500 }
       )
     }

@@ -1,24 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getCollection, Collections } from '@/lib/mongodb'
 
 export async function GET(request: NextRequest) {
   try {
-    // Get all unique categories from public videos
-    const categories = await prisma.video.groupBy({
-      by: ['category'],
-      where: {
-        status: 'READY',
-        isPublic: true,
-        category: { not: null }
+    const videosCollection = await getCollection(Collections.VIDEOS)
+
+    const categories = await videosCollection.aggregate([
+      {
+        $match: {
+          category: { $ne: null },
+          status: 'READY',
+          isPublic: true
+        }
       },
-      _count: {
-        category: true
+      {
+        $group: {
+          _id: '$category',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { count: -1 }
       }
-    })
+    ]).toArray()
 
     const transformedCategories = categories.map((cat: any) => ({
-      name: cat.category,
-      count: cat._count.category
+      name: cat._id,
+      count: cat.count
     }))
 
     return NextResponse.json({ categories: transformedCategories })
