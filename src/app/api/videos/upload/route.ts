@@ -1,0 +1,197 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
+import { saveFile, generateThumbnail, generateUniqueFilename, isValidVideoFile } from '@/lib/upload'
+
+export async function POST(request: NextRequest) {
+  try {
+    // Check authentication
+    const user = await requireAuth(request)
+    
+    const formData = await request.formData()
+    const file = formData.get('video') as File
+    const coverImageFile = formData.get('coverImage') as File | null
+    const title = formData.get('title') as string
+    const description = formData.get('description') as string || ''
+    const category = formData.get('category') as string || ''
+    const tags = formData.get('tags') as string || ''
+    const isPublic = formData.get('isPublic') === 'true'
+    const isFeatured = formData.get('isFeatured') === 'true'
+
+    console.log('Upload request received:', {
+      fileName: file?.name,
+      fileSize: file?.size,
+      fileType: file?.type,
+      title,
+      category,
+      isPublic,
+      isFeatured,
+      hasCoverImage: !!coverImageFile
+    })
+
+    if (!file) {
+      return NextResponse.json(
+        { error: 'No video file provided' },
+        { status: 400 }
+      )
+    }
+
+    if (!file.name) {
+      return NextResponse.json(
+        { error: 'Invalid file: missing filename' },
+        { status: 400 }
+      )
+    }
+
+    if (!file.size || file.size === 0) {
+      return NextResponse.json(
+        { error: 'Invalid file: file is empty' },
+        { status: 400 }
+      )
+    }
+
+    if (!title || title.trim() === '') {
+      return NextResponse.json(
+        { error: 'Title is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!isValidVideoFile(file)) {
+      return NextResponse.json(
+        { error: `Invalid video file type: ${file.type}. Supported formats: MP4, MPEG, MOV, AVI, WebM` },
+        { status: 400 }
+      )
+    }
+
+    // Check file size (500MB limit)
+    const maxSize = 500 * 1024 * 1024 // 500MB
+    if (file.size > maxSize) {
+      return NextResponse.json(
+        { error: 'File too large. Maximum size is 500MB' },
+        { status: 400 }
+      )
+    }
+
+    // Generate unique filename
+    const filename = generateUniqueFilename(file.name)
+    console.log('Generated filename:', filename)
+    
+    // Save the video file
+    const videoPath = await saveFile(file, filename)
+    console.log('File saved to:', videoPath)
+    
+    let thumbnailPath = ''
+    
+    // Handle cover image or generate thumbnail
+    if (coverImageFile && coverImageFile.size > 0) {
+      // Save custom cover image
+      const coverImageName = filename.replace(/\.[^/.]+$/, '_cover.jpg')
+      thumbnailPath = await saveFile(coverImageFile, coverImageName, 'thumbnails')
+      console.log('Cover image saved:', thumbnailPath)
+    } else {
+      // Generate thumbnail from video
+      const thumbnailName = filename.replace(/\.[^/.]+$/, '.png')
+      thumbnailPath = await generateThumbnail(videoPath, thumbnailName)
+      console.log('Thumbnail generated:', thumbnailPath)
+    }
+
+    // Create video record in database (temporarily without isFeatured)
+    const videoData: any = {
+      title: title.trim(),
+      description: description.trim(),
+      filename,
+      originalName: file.name,
+      mimeType: file.type,
+      size: file.size,
+      thumbnail: thumbnailPath,
+      category: category.trim() || null,
+      tags: tags.trim() || null,
+      isPublic,
+      uploadedBy: user.userId,
+      status: 'READY'
+    }
+    
+    console.log('Creating video record with data:', videoData)
+    
+    const video = await prisma.video.create({
+      data: videoData
+    })
+
+    // Update with isFeatured field using raw query as workaround
+    if (isFeatured) {
+      await prisma.$executeRaw`UPDATE videos SET isFeatured = ${isFeatured} WHERE id = ${video.id}`
+    }
+
+    console.log('Video record created:', video.id)
+
+    // Log activity
+    await prisma.activity.create({
+      data: {
+        type: 'VIDEO_UPLOAD',
+        message: `Video uploaded: ${title}${isFeatured ? ' (Featured)' : ''}`,
+        userId: user.userId,
+        videoId: video.id,
+        metadata: JSON.stringify({
+          filename,
+          size: file.size,
+          mimeType: file.type,
+          hasCoverImage: !!coverImageFile,
+          isFeatured
+        })
+      }
+    })
+
+    return NextResponse.json({
+      video: {
+        id: video.id,
+        title: video.title,
+        description: video.description,
+        thumbnail: video.thumbnail,
+        status: video.status,
+        createdAt: video.createdAt
+      }
+    })
+  } catch (error) {
+    console.error('Upload error details:', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined
+    })
+    
+    if (error instanceof Error && error.message.includes('Authentication')) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 401 }
+      )
+    }
+
+    if (error instanceof Error && error.message.includes('ENOENT')) {
+      return NextResponse.json(
+        { error: 'Failed to save file. Please try again.' },
+        { status: 500 }
+      )
+    }
+
+    // Database errors
+    if (error instanceof Error && error.message.includes('Prisma')) {
+      return NextResponse.json(
+        { error: `Database error: ${error.message}` },
+        { status: 500 }
+      )
+    }
+
+    // File system errors
+    if (error instanceof Error && (error.message.includes('EACCES') || error.message.includes('EPERM'))) {
+      return NextResponse.json(
+        { error: 'File system permission error. Please check server configuration.' },
+        { status: 500 }
+      )
+    }
+    
+    return NextResponse.json(
+      { error: `Internal server error: ${error instanceof Error ? error.message : 'Unknown error'}` },
+      { status: 500 }
+    )
+  }
+}
