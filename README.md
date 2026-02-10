@@ -162,20 +162,55 @@ UPLOAD_DIR="./public/uploads"
 
 ## Deployment
 
-### Production Setup
-1. Set up production database (PostgreSQL recommended)
+### Vercel Deployment (Recommended)
+
+This application is optimized for Vercel deployment with MongoDB Atlas:
+
+1. **Database Setup**
+   - Use MongoDB Atlas (cloud database)
+   - Update `DATABASE_URL` in environment variables
+
+2. **Environment Variables**
+   Set these in Vercel dashboard:
+   ```env
+   DATABASE_URL="mongodb+srv://username:password@cluster.mongodb.net/database"
+   JWT_SECRET="your-super-secret-jwt-key"
+   MAX_FILE_SIZE=100000000
+   ```
+
+3. **File Storage Considerations**
+   - Vercel serverless functions have size limits (300MB)
+   - For production, use cloud storage:
+     - AWS S3
+     - Cloudinary
+     - Vercel Blob Storage
+   - Current implementation uses local storage (development only)
+
+4. **Deploy to Vercel**
+   ```bash
+   npm run build  # Test build locally
+   vercel --prod  # Deploy to production
+   ```
+
+### Other Platforms
+
+For other platforms (AWS, Google Cloud, etc.):
+1. Set up MongoDB database
 2. Configure environment variables
-3. Build and deploy:
+3. Set up cloud storage for file uploads
+4. Build and deploy:
 ```bash
 npm run build
 npm run start
 ```
 
-### Environment Configuration
-- Update `DATABASE_URL` for production database
-- Set strong `JWT_SECRET`
-- Configure file storage (AWS S3, etc.)
-- Set up CDN for video delivery
+### Bundle Size Optimization
+
+The application is optimized for serverless deployment:
+- Sharp image processing is optional in production
+- Large files excluded from deployment bundle
+- MongoDB driver optimized for serverless
+- No Prisma client generation issues
 
 ## Security Considerations
 

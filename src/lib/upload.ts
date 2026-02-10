@@ -1,7 +1,16 @@
 import { writeFile, mkdir } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
-import sharp from 'sharp'
+
+// Conditional import for Sharp to reduce bundle size in serverless
+let sharp: any = null
+if (!process.env.VERCEL && process.env.NODE_ENV !== 'production') {
+  try {
+    sharp = require('sharp')
+  } catch (e) {
+    console.warn('Sharp not available, thumbnail generation disabled')
+  }
+}
 
 export const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads')
 export const THUMBNAILS_DIR = path.join(UPLOAD_DIR, 'thumbnails')
@@ -18,6 +27,13 @@ export async function ensureUploadDirs() {
 
 export async function saveFile(file: File, filename: string, subfolder?: string): Promise<string> {
   try {
+    // In production/Vercel, you should use cloud storage (S3, Cloudinary, Vercel Blob)
+    if (process.env.VERCEL) {
+      console.warn('File upload in serverless environment - consider using cloud storage')
+      // For now, return a placeholder path
+      return `/uploads/${subfolder ? subfolder + '/' : ''}${filename}`
+    }
+    
     await ensureUploadDirs()
     
     const bytes = await file.arrayBuffer()
@@ -52,6 +68,12 @@ export async function saveFile(file: File, filename: string, subfolder?: string)
 export async function generateThumbnail(videoPath: string, thumbnailName: string): Promise<string> {
   try {
     await ensureUploadDirs()
+    
+    // For serverless environments or when Sharp is not available, skip thumbnail generation
+    if (process.env.VERCEL || process.env.NODE_ENV === 'production' || !sharp) {
+      console.log('Skipping thumbnail generation in serverless environment or Sharp not available')
+      return '/placeholder-video.svg'
+    }
     
     // For now, create a placeholder thumbnail
     // In production, you'd use ffmpeg to extract a frame from the video

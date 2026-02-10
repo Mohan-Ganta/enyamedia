@@ -31,10 +31,13 @@ yarn-error.log*
 .pnpm-debug.log*
 
 
-
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# uploads (exclude from git and deployment)
+/public/uploads/**
+!/public/uploads/.gitkeep
