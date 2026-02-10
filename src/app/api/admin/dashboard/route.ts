@@ -137,13 +137,13 @@ export async function GET(request: NextRequest) {
       })),
       recentActivities: recentActivities.map((activity: any) => ({
         ...activity,
-        _id: activity._id.toString(),
+        id: activity._id.toString(), // Use 'id' instead of '_id'
         userId: activity.userId?.toString(),
         videoId: activity.videoId?.toString()
       })),
       recentUploads: recentUploads.map((video: any) => ({
         ...video,
-        _id: video._id.toString(),
+        id: video._id.toString(), // Use 'id' instead of '_id'
         uploadedBy: video.uploadedBy.toString(),
         uploader: video.uploader ? {
           name: video.uploader.name,

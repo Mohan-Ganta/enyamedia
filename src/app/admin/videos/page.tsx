@@ -53,18 +53,24 @@ export default function VideoManagement() {
         return
       }
 
+      console.log('Fetching videos with token:', token.substring(0, 20) + '...')
+      
       const response = await fetch('/api/admin/videos', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       })
 
+      console.log('Videos API response status:', response.status)
+
       if (response.ok) {
         const data = await response.json()
-        console.log('Videos data received:', data) // Debug log
+        console.log('Videos data received:', data)
+        console.log('Number of videos:', data.videos?.length || 0)
         setVideos(Array.isArray(data.videos) ? data.videos : [])
       } else {
-        console.error('Failed to fetch videos:', response.status, response.statusText)
+        const errorData = await response.json()
+        console.error('Failed to fetch videos:', response.status, response.statusText, errorData)
       }
     } catch (error) {
       console.error('Failed to fetch videos:', error)
@@ -123,9 +129,15 @@ export default function VideoManagement() {
             ? { ...video, isFeatured: !isFeatured }
             : video
         ))
+        console.log('Featured status updated successfully')
+      } else {
+        const errorData = await response.json()
+        console.error('Failed to update featured status:', errorData)
+        alert(`Failed to update featured status: ${errorData.error || 'Unknown error'}`)
       }
     } catch (error) {
       console.error('Failed to update featured status:', error)
+      alert('Failed to update featured status: Network error')
     }
   }
 
@@ -147,9 +159,15 @@ export default function VideoManagement() {
             ? { ...video, isPublic: !isPublic }
             : video
         ))
+        console.log('Public status updated successfully')
+      } else {
+        const errorData = await response.json()
+        console.error('Failed to update public status:', errorData)
+        alert(`Failed to update public status: ${errorData.error || 'Unknown error'}`)
       }
     } catch (error) {
       console.error('Failed to update public status:', error)
+      alert('Failed to update public status: Network error')
     }
   }
 

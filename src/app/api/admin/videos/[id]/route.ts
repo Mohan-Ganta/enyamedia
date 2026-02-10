@@ -42,7 +42,7 @@ export async function GET(
 
     const videoWithUploader = {
       ...video,
-      _id: video._id!.toString(),
+      id: video._id!.toString(), // Use 'id' instead of '_id'
       uploadedBy: video.uploadedBy.toString(),
       uploader: uploader ? {
         name: uploader.name,
@@ -101,6 +101,7 @@ export async function PATCH(
     if (title !== undefined) updateData.title = title
     if (description !== undefined) updateData.description = description
     if (category !== undefined) updateData.category = category
+    if (body.tags !== undefined) updateData.tags = body.tags
     if (isPublic !== undefined) updateData.isPublic = isPublic
     if (isFeatured !== undefined) updateData.isFeatured = isFeatured
 
@@ -132,7 +133,7 @@ export async function PATCH(
 
     const videoWithUploader = {
       ...updatedVideo,
-      _id: updatedVideo._id!.toString(),
+      id: updatedVideo._id!.toString(), // Use 'id' instead of '_id'
       uploadedBy: updatedVideo.uploadedBy.toString(),
       uploader: uploader ? {
         name: uploader.name,

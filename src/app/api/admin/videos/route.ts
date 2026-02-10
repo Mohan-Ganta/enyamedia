@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
         return {
           ...video,
-          _id: video._id!.toString(),
+          id: video._id!.toString(), // Use 'id' instead of '_id'
           uploadedBy: video.uploadedBy.toString(),
           uploader: uploader ? {
             name: uploader.name,
