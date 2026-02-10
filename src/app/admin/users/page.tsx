@@ -27,6 +27,11 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('auth-token')
+      if (!token) {
+        console.error('No auth token found')
+        return
+      }
+
       const response = await fetch('/api/admin/users', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -35,7 +40,10 @@ export default function UsersPage() {
       
       if (response.ok) {
         const data = await response.json()
-        setUsers(data.users)
+        console.log('Users data received:', data) // Debug log
+        setUsers(Array.isArray(data.users) ? data.users : [])
+      } else {
+        console.error('Failed to fetch users:', response.status, response.statusText)
       }
     } catch (error) {
       console.error('Failed to fetch users:', error)

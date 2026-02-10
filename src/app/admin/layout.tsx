@@ -16,6 +16,7 @@ import {
   BarChart3,
   Activity
 } from 'lucide-react'
+import ErrorBoundary from '@/components/ErrorBoundary'
 
 interface User {
   id: string
@@ -208,7 +209,9 @@ export default function AdminLayout({
 
         {/* Page content */}
         <main className="flex-1 p-6 bg-black">
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

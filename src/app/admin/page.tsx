@@ -35,7 +35,7 @@ interface RecentUpload {
   id: string
   title: string
   createdAt: string
-  uploader: { name: string; email: string }
+  uploader?: { name: string; email: string } | null
   size: number
 }
 
@@ -54,6 +54,11 @@ export default function AdminDashboard() {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('auth-token')
+      if (!token) {
+        console.error('No auth token found')
+        return
+      }
+
       const response = await fetch('/api/admin/dashboard', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -62,11 +67,15 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         const data = await response.json()
-        setStats(data.stats)
-        setVideosByStatus(data.videosByStatus || [])
-        setVideosByCategory(data.videosByCategory || [])
-        setRecentActivities(data.recentActivities || [])
-        setRecentUploads(data.recentUploads || [])
+        console.log('Dashboard data received:', data) // Debug log
+        
+        setStats(data.stats || {})
+        setVideosByStatus(Array.isArray(data.videosByStatus) ? data.videosByStatus : [])
+        setVideosByCategory(Array.isArray(data.videosByCategory) ? data.videosByCategory : [])
+        setRecentActivities(Array.isArray(data.recentActivities) ? data.recentActivities : [])
+        setRecentUploads(Array.isArray(data.recentUploads) ? data.recentUploads : [])
+      } else {
+        console.error('Failed to fetch dashboard data:', response.status, response.statusText)
       }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error)
@@ -286,10 +295,10 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-white truncate">
-                      {upload.title}
+                      {upload.title || 'Untitled Video'}
                     </p>
                     <p className="text-xs text-gray-400">
-                      by {upload.uploader.name} • {formatFileSize(upload.size)}
+                      by {upload.uploader?.name || 'Unknown User'} • {formatFileSize(upload.size || 0)}
                     </p>
                     <p className="text-xs text-gray-400">
                       {new Date(upload.createdAt).toLocaleString()}

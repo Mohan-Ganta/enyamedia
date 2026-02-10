@@ -27,10 +27,10 @@ interface Video {
   likes: number
   thumbnail?: string
   createdAt: string
-  uploader: {
+  uploader?: {
     name: string
     email: string
-  }
+  } | null
 }
 
 export default function VideoManagement() {
@@ -48,6 +48,11 @@ export default function VideoManagement() {
   const fetchVideos = async () => {
     try {
       const token = localStorage.getItem('auth-token')
+      if (!token) {
+        console.error('No auth token found')
+        return
+      }
+
       const response = await fetch('/api/admin/videos', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -56,7 +61,10 @@ export default function VideoManagement() {
 
       if (response.ok) {
         const data = await response.json()
-        setVideos(data.videos || [])
+        console.log('Videos data received:', data) // Debug log
+        setVideos(Array.isArray(data.videos) ? data.videos : [])
+      } else {
+        console.error('Failed to fetch videos:', response.status, response.statusText)
       }
     } catch (error) {
       console.error('Failed to fetch videos:', error)
@@ -162,7 +170,7 @@ export default function VideoManagement() {
 
   const filteredVideos = videos.filter(video => {
     const matchesSearch = video.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         video.uploader.name.toLowerCase().includes(searchTerm.toLowerCase())
+                         (video.uploader?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === 'all' || video.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -283,7 +291,7 @@ export default function VideoManagement() {
                             {video.title}
                           </div>
                           <div className="text-sm text-gray-400">
-                            by {video.uploader.name}
+                            by {video.uploader?.name || 'Unknown User'}
                           </div>
                         </div>
                       </div>

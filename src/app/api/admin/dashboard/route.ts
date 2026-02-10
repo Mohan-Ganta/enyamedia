@@ -68,10 +68,28 @@ export async function GET(request: NextRequest) {
         .toArray(),
       
       // Recent uploads (last 5)
-      videosCollection.find({})
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .toArray(),
+      videosCollection.aggregate([
+        {
+          $sort: { createdAt: -1 }
+        },
+        {
+          $limit: 5
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'uploadedBy',
+            foreignField: '_id',
+            as: 'uploader'
+          }
+        },
+        {
+          $unwind: {
+            path: '$uploader',
+            preserveNullAndEmptyArrays: true
+          }
+        }
+      ]).toArray(),
       
       // Upload trends (last 7 days)
       videosCollection.aggregate([
@@ -126,7 +144,11 @@ export async function GET(request: NextRequest) {
       recentUploads: recentUploads.map((video: any) => ({
         ...video,
         _id: video._id.toString(),
-        uploadedBy: video.uploadedBy.toString()
+        uploadedBy: video.uploadedBy.toString(),
+        uploader: video.uploader ? {
+          name: video.uploader.name,
+          email: video.uploader.email
+        } : null
       })),
       uploadTrends: uploadTrends.map((item: any) => ({
         date: item._id,
