@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
         totalVideos,
         totalUsers,
         totalStorage: storageUsage._sum.size || 0,
-        activeUploads: videosByStatus.find(s => s.status === 'PROCESSING')?._count.status || 0
+        activeUploads: videosByStatus.find((s: any) => s.status === 'PROCESSING')?._count.status || 0
       },
       videosByStatus: videosByStatus.map(item => ({
         status: item.status,
