@@ -118,9 +118,12 @@ export async function POST(request: NextRequest) {
       data: videoData
     })
 
-    // Update with isFeatured field using raw query as workaround
-    if (isFeatured) {
-      await prisma.$executeRaw`UPDATE videos SET isFeatured = ${isFeatured} WHERE id = ${video.id}`
+    // Update with isFeatured field if needed
+    if (isFeatured && !videoData.isFeatured) {
+      await prisma.video.update({
+        where: { id: video.id },
+        data: { isFeatured: true }
+      })
     }
 
     console.log('Video record created:', video.id)
