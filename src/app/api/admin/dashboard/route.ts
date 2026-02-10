@@ -86,17 +86,17 @@ export async function GET(request: NextRequest) {
         totalStorage: storageUsage._sum.size || 0,
         activeUploads: videosByStatus.find((s: any) => s.status === 'PROCESSING')?._count.status || 0
       },
-      videosByStatus: videosByStatus.map(item => ({
+      videosByStatus: videosByStatus.map((item: any) => ({
         status: item.status,
         count: item._count.status
       })),
-      videosByCategory: videosByCategory.map(item => ({
+      videosByCategory: videosByCategory.map((item: any) => ({
         category: item.category,
         count: item._count.category
       })),
       recentActivities,
       recentUploads,
-      uploadTrends: uploadTrends.map(item => ({
+      uploadTrends: uploadTrends.map((item: any) => ({
         date: item.createdAt,
         count: item._count.id
       }))

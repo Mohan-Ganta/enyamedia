@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Transform to match the expected format
-    const transformedVideos = videos.map(video => ({
+    const transformedVideos = videos.map((video: any) => ({
       id: video.id,
       title: video.title,
       imageUrl: video.thumbnail || '/placeholder-video.svg',

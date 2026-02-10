@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const transformedCategories = categories.map(cat => ({
+    const transformedCategories = categories.map((cat: any) => ({
       name: cat.category,
       count: cat._count.category
     }))
