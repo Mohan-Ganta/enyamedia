@@ -142,11 +142,11 @@ export default function AdminLogin() {
             </p>
           </div>
           {/* Admin Credentials */}
-          <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-md">
+          {/* <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-md">
             <p className="text-sm font-medium text-yellow-400 mb-2">Admin Login Credentials:</p>
             <p className="text-sm text-yellow-300">Email: admin@enyamedia.com</p>
             <p className="text-sm text-yellow-300">Password: admin123</p>
-          </div>
+          </div> */}
         </form>
       </div>
     </div>

@@ -129,11 +129,11 @@ export default function LoginPage() {
                 </div>
 
                 {/* Test Credentials */}
-                <div className="mt-8 p-3 bg-blue-900/20 rounded border border-blue-500/30">
+                {/* <div className="mt-8 p-3 bg-blue-900/20 rounded border border-blue-500/30">
                     <p className="text-xs text-blue-300 mb-2 font-medium">Admin Login Credentials:</p>
                     <p className="text-xs text-blue-200">Email: admin@enyamedia.com</p>
                     <p className="text-xs text-blue-200">Password: admin123</p>
-                </div>
+                </div> */}
             </div>
         </div>
         </MainLayout>
