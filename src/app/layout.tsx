@@ -5,8 +5,6 @@ import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
-
-
 export const metadata: Metadata = {
   title: "EnyaMedia - Restored Classics",
   description: "Experience the golden age of cinema in stunning restored color.",
