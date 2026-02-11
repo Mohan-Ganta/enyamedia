@@ -55,6 +55,11 @@ export default function VideoPlayer({
   const [videoDuration, setVideoDuration] = useState(0)
   const [isSafari, setIsSafari] = useState(false)
 
+  // Safari/iOS specific state
+  const [safariLoadAttempts, setSafariLoadAttempts] = useState(0)
+  const [safariLoadTimeout, setSafariLoadTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [forceReload, setForceReload] = useState(0)
+
   // Detect Safari browser - moved to useMemo to avoid effect
   const isSafariBrowser = useMemo(() => {
     if (typeof navigator === 'undefined') return false
@@ -169,8 +174,12 @@ export default function VideoPlayer({
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current)
       }
+      // Clean up Safari timeout
+      if (safariLoadTimeout) {
+        clearTimeout(safariLoadTimeout)
+      }
     }
-  }, [videoUrl, fallbackUrl, videoId, predefinedQualities])
+  }, [videoUrl, fallbackUrl, videoId, predefinedQualities, safariLoadTimeout])
 
   const handleQualityChange = (quality: VideoQuality) => {
     if (!videoRef.current) return
@@ -322,14 +331,42 @@ export default function VideoPlayer({
     setIsLoading(true)
     setError(null)
     setIsBuffering(true)
+    
+    // Safari-specific: Set a timeout to force reload if stuck
+    if (isSafari) {
+      if (safariLoadTimeout) {
+        clearTimeout(safariLoadTimeout)
+      }
+      
+      const timeout = setTimeout(() => {
+        if (isLoading && safariLoadAttempts < 3) {
+          console.log(`Safari load timeout, attempt ${safariLoadAttempts + 1}`)
+          setSafariLoadAttempts(prev => prev + 1)
+          setForceReload(prev => prev + 1)
+          
+          if (videoRef.current) {
+            videoRef.current.load()
+          }
+        }
+      }, 8000) // 8 second timeout for Safari
+      
+      setSafariLoadTimeout(timeout)
+    }
   }
 
   const handleCanPlay = () => {
+    // Clear Safari timeout
+    if (safariLoadTimeout) {
+      clearTimeout(safariLoadTimeout)
+      setSafariLoadTimeout(null)
+    }
+    
     // Safari sometimes needs a delay
     if (isSafari) {
       setTimeout(() => {
         setIsLoading(false)
         setIsBuffering(false)
+        setSafariLoadAttempts(0) // Reset attempts on success
       }, 100)
     } else {
       setIsLoading(false)
@@ -338,9 +375,16 @@ export default function VideoPlayer({
   }
 
   const handleCanPlayThrough = () => {
+    // Clear Safari timeout
+    if (safariLoadTimeout) {
+      clearTimeout(safariLoadTimeout)
+      setSafariLoadTimeout(null)
+    }
+    
     // Safari-specific: Video is ready to play through
     setIsLoading(false)
     setIsBuffering(false)
+    setSafariLoadAttempts(0) // Reset attempts on success
   }
 
   const handleWaiting = () => {
@@ -439,8 +483,15 @@ export default function VideoPlayer({
   }
 
   const handlePlay = () => {
+    // Clear Safari timeout
+    if (safariLoadTimeout) {
+      clearTimeout(safariLoadTimeout)
+      setSafariLoadTimeout(null)
+    }
+    
     setIsLoading(false)
     setIsBuffering(false)
+    setSafariLoadAttempts(0) // Reset attempts on success
   }
 
   return (
@@ -453,11 +504,12 @@ export default function VideoPlayer({
       <video
         ref={videoRef}
         className="w-full h-full"
-        preload="metadata"
+        preload={isSafari ? "auto" : "metadata"}
         playsInline
         webkit-playsinline="true"
         muted={false}
         controls={false}
+        autoPlay={false}
         onLoadStart={handleLoadStart}
         onLoadedMetadata={handleLoadedMetadata}
         onCanPlay={handleCanPlay}
@@ -467,15 +519,50 @@ export default function VideoPlayer({
         onError={handleError}
         onPlay={handlePlay}
         onLoadedData={() => {
+          // Clear Safari timeout
+          if (safariLoadTimeout) {
+            clearTimeout(safariLoadTimeout)
+            setSafariLoadTimeout(null)
+          }
+          
           // Safari-specific: Ensure video is ready
           if (isSafari) {
             setTimeout(() => {
               setIsLoading(false)
               setIsBuffering(false)
+              setSafariLoadAttempts(0)
             }, 200)
           } else {
             setIsLoading(false)
             setIsBuffering(false)
+          }
+        }}
+        onProgress={() => {
+          // Safari: Video is making progress
+          if (isSafari && isLoading) {
+            setIsLoading(false)
+            setIsBuffering(false)
+          }
+        }}
+        onSuspend={() => {
+          // Safari: Video loading suspended
+          if (isSafari) {
+            console.log('Safari video loading suspended')
+            setIsBuffering(true)
+          }
+        }}
+        onStalled={() => {
+          // Safari: Video loading stalled
+          if (isSafari) {
+            console.log('Safari video loading stalled')
+            setIsBuffering(true)
+            
+            // Try to resume after a short delay
+            setTimeout(() => {
+              if (videoRef.current) {
+                videoRef.current.load()
+              }
+            }, 2000)
           }
         }}
         crossOrigin="anonymous"
@@ -484,7 +571,7 @@ export default function VideoPlayer({
           objectFit: 'contain',
           display: 'block'
         }}
-        key={currentSrc}
+        key={`${currentSrc}-${forceReload}`}
         onClick={togglePlay}
         onTouchStart={(e) => {
           // Prevent default touch behavior on iOS
@@ -654,12 +741,31 @@ export default function VideoPlayer({
         </div>
       )}
 
-      {/* Loading overlay */}
+      {/* Loading overlay with Safari-specific retry */}
       {isLoading && !error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-            <p className="text-white">Loading video...</p>
+            <p className="text-white mb-2">Loading video...</p>
+            {isSafari && safariLoadAttempts > 0 && (
+              <div className="text-center">
+                <p className="text-yellow-300 text-sm mb-2">
+                  Safari loading issue detected (Attempt {safariLoadAttempts}/3)
+                </p>
+                <button 
+                  onClick={() => {
+                    setSafariLoadAttempts(0)
+                    setForceReload(prev => prev + 1)
+                    if (videoRef.current) {
+                      videoRef.current.load()
+                    }
+                  }}
+                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
+                >
+                  Retry Loading
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

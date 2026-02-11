@@ -18,6 +18,61 @@ export async function OPTIONS() {
   })
 }
 
+export async function HEAD(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    
+    const videosCollection = await getCollection(Collections.VIDEOS)
+    
+    // Get video from database
+    const video = await videosCollection.findOne({
+      _id: new ObjectId(id)
+    }) as Video | null
+
+    if (!video) {
+      return new NextResponse(null, { status: 404 })
+    }
+
+    // Check if video is public
+    if (!video.isPublic) {
+      return new NextResponse(null, { status: 403 })
+    }
+
+    // Return headers for Safari preflight
+    const headers = new Headers()
+    headers.set('Content-Type', video.mimeType || 'video/mp4')
+    headers.set('Accept-Ranges', 'bytes')
+    headers.set('Access-Control-Allow-Origin', '*')
+    headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+    headers.set('Access-Control-Allow-Headers', 'Range, Content-Type')
+    headers.set('Cache-Control', 'public, max-age=3600')
+    
+    // Try to get content length from S3 or local file
+    if (isS3Configured() && video.videoUrl) {
+      try {
+        const s3Response = await fetch(video.videoUrl, { method: 'HEAD' })
+        const contentLength = s3Response.headers.get('content-length')
+        if (contentLength) {
+          headers.set('Content-Length', contentLength)
+        }
+      } catch (error) {
+        console.error('S3 HEAD request failed:', error)
+      }
+    }
+
+    return new NextResponse(null, {
+      status: 200,
+      headers
+    })
+  } catch (error) {
+    console.error('HEAD request error:', error)
+    return new NextResponse(null, { status: 500 })
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -74,13 +129,22 @@ export async function GET(
           throw new Error('No response body from S3')
         }
 
-        // Create response with proper headers
+        // Create response with proper headers for Safari
         const headers = new Headers()
         headers.set('Content-Type', video.mimeType || 'video/mp4')
         headers.set('Access-Control-Allow-Origin', '*')
         headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
         headers.set('Access-Control-Allow-Headers', 'Range, Content-Type')
         headers.set('Cache-Control', 'public, max-age=3600')
+        
+        // Safari-specific headers
+        headers.set('Accept-Ranges', 'bytes')
+        headers.set('Connection', 'keep-alive')
+        
+        // Add Safari-friendly MIME type if needed
+        if (video.mimeType?.includes('mp4')) {
+          headers.set('Content-Type', 'video/mp4')
+        }
 
         // Copy relevant headers from S3 response
         const contentLength = s3Response.headers.get('content-length')

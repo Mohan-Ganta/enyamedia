@@ -224,6 +224,13 @@ export default function WatchPage() {
     }
 
     const videoUrl = `/api/videos/${id}/stream`  // Always use streaming API to avoid CORS
+    
+    // Safari-specific: Add cache busting for problematic videos
+    const isSafari = typeof navigator !== 'undefined' && 
+      /safari/i.test(navigator.userAgent) && 
+      !/chrome/i.test(navigator.userAgent)
+    
+    const safariVideoUrl = isSafari ? `${videoUrl}?safari=1&t=${Date.now()}` : videoUrl
 
     return (
         <MainLayout>
@@ -232,7 +239,7 @@ export default function WatchPage() {
                 <div className="pt-16">
                     <div className="relative w-full h-[56.25vw] max-h-[80vh] bg-black">
                         <VideoPlayer
-                            videoUrl={videoUrl}
+                            videoUrl={safariVideoUrl}
                             mimeType={video.mimeType}
                             thumbnail={video.thumbnail}
                             title={video.title}
