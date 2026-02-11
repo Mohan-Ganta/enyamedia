@@ -80,22 +80,22 @@ export async function POST(request: NextRequest) {
     console.log('Generated filename:', filename)
     
     // Save the video file
-    const videoPath = await saveFile(file, filename)
-    console.log('File saved to:', videoPath)
+    const videoResult = await saveFile(file, filename, undefined, user.userId)
+    console.log('File saved to:', videoResult.url)
     
-    let thumbnailPath = ''
+    let thumbnailResult: { url: string; s3Key?: string } = { url: '', s3Key: undefined }
     
     // Handle cover image or generate thumbnail
     if (coverImageFile && coverImageFile.size > 0) {
       // Save custom cover image
       const coverImageName = filename.replace(/\.[^/.]+$/, '_cover.jpg')
-      thumbnailPath = await saveFile(coverImageFile, coverImageName, 'thumbnails')
-      console.log('Cover image saved:', thumbnailPath)
+      thumbnailResult = await saveFile(coverImageFile, coverImageName, 'thumbnails', user.userId)
+      console.log('Cover image saved:', thumbnailResult.url)
     } else {
       // Generate thumbnail from video
       const thumbnailName = filename.replace(/\.[^/.]+$/, '.png')
-      thumbnailPath = await generateThumbnail(videoPath, thumbnailName)
-      console.log('Thumbnail generated:', thumbnailPath)
+      thumbnailResult = await generateThumbnail(videoResult.url, thumbnailName, user.userId)
+      console.log('Thumbnail generated:', thumbnailResult.url)
     }
 
     const videosCollection = await getCollection(Collections.VIDEOS)
@@ -109,7 +109,10 @@ export async function POST(request: NextRequest) {
       originalName: file.name,
       mimeType: file.type,
       size: file.size,
-      thumbnail: thumbnailPath,
+      videoUrl: videoResult.url, // Store the S3 URL or local path
+      s3Key: videoResult.s3Key, // Store S3 key for easy deletion
+      thumbnail: thumbnailResult.url,
+      thumbnailS3Key: thumbnailResult.s3Key, // Store thumbnail S3 key
       category: category.trim() || undefined,
       tags: tags.trim() || undefined,
       isPublic,

@@ -1,0 +1,52 @@
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle for better visibility -->
+  <circle cx="50" cy="50" r="48" fill="#000000" stroke="#333333" stroke-width="2"/>
+  
+  <!-- Colorful leaves/petals at top -->
+  <path d="M50 8 L58 18 L50 28 L42 18 Z" fill="#FF4444"/>
+  <path d="M38 15 L46 25 L38 35 L30 25 Z" fill="#4444FF"/>
+  <path d="M62 15 L70 25 L62 35 L54 25 Z" fill="#44FF44"/>
+  
+  <!-- Letter E (Green) -->
+  <path d="M15 25 L15 75 L35 75 L35 70 L20 70 L20 52 L30 52 L30 47 L20 47 L20 30 L35 30 L35 25 Z" fill="#44FF44" stroke="#44FF44" stroke-width="1"/>
+  
+  <!-- Letter N (Orange) -->
+  <path d="M40 25 L40 75 L45 75 L45 35 L55 75 L60 75 L60 25 L55 25 L55 65 L45 25 Z" fill="#FF8800" stroke="#FF8800" stroke-width="1"/>
+  
+  <!-- Letter Y with film strip (Center) -->
+  <g>
+    <!-- Film strip curve -->
+    <path d="M50 35 Q42 40 38 50 Q36 60 40 70 Q44 80 54 82 Q64 80 68 70 Q70 60 66 50 Q62 40 50 35 Z" fill="#CCCCCC" stroke="#666666" stroke-width="1"/>
+    
+    <!-- Film perforations -->
+    <rect x="40" y="45" width="3" height="2" fill="#000000"/>
+    <rect x="40" y="50" width="3" height="2" fill="#000000"/>
+    <rect x="40" y="55" width="3" height="2" fill="#000000"/>
+    <rect x="40" y="60" width="3" height="2" fill="#000000"/>
+    <rect x="40" y="65" width="3" height="2" fill="#000000"/>
+    
+    <rect x="57" y="45" width="3" height="2" fill="#000000"/>
+    <rect x="57" y="50" width="3" height="2" fill="#000000"/>
+    <rect x="57" y="55" width="3" height="2" fill="#000000"/>
+    <rect x="57" y="60" width="3" height="2" fill="#000000"/>
+    <rect x="57" y="65" width="3" height="2" fill="#000000"/>
+    
+    <!-- Film frames -->
+    <rect x="45" y="47" width="5" height="4" fill="#FFFFFF" stroke="#666666" stroke-width="0.5"/>
+    <rect x="50" y="47" width="5" height="4" fill="#FFFFFF" stroke="#666666" stroke-width="0.5"/>
+    <rect x="45" y="57" width="5" height="4" fill="#FFFFFF" stroke="#666666" stroke-width="0.5"/>
+    <rect x="50" y="57" width="5" height="4" fill="#FFFFFF" stroke="#666666" stroke-width="0.5"/>
+    <rect x="45" y="67" width="5" height="4" fill="#FFFFFF" stroke="#666666" stroke-width="0.5"/>
+    <rect x="50" y="67" width="5" height="4" fill="#FFFFFF" stroke="#666666" stroke-width="0.5"/>
+    
+    <!-- Red play button -->
+    <circle cx="50" cy="30" r="4" fill="#FF4444"/>
+    <path d="M48 28 L53 30 L48 32 Z" fill="#FFFFFF"/>
+    
+    <!-- Red vertical line -->
+    <rect x="49" y="25" width="2" height="8" fill="#FF4444"/>
+  </g>
+  
+  <!-- Letter A (Blue) -->
+  <path d="M75 25 L70 75 L75 75 L75 55 L85 55 L85 75 L90 75 L85 25 L80 25 L75 30 Z M75 50 L75 35 L80 35 L85 50 Z" fill="#4444FF" stroke="#4444FF" stroke-width="1"/>
+</svg>

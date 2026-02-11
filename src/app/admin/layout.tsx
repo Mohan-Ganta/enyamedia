@@ -119,9 +119,11 @@ export default function AdminLayout({
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-gray-800">
             <Link href="/admin" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
-                <span className="text-black font-bold text-sm">E</span>
-              </div>
+              <img 
+                src="/enya_logo.png" 
+                alt="EnyaMedia Logo" 
+                className="w-8 h-8"
+              />
               <span className="text-lg font-bold text-white">ENYAMEDIA</span>
             </Link>
             <button

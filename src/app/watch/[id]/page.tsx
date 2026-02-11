@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Plus, Share2, ThumbsUp } from 'lucide-react'
 import { MovieCard } from '@/components/movies/MovieCard'
 import { MainLayout } from '@/components/layout/MainLayout'
+import VideoPlayer from '@/components/VideoPlayer'
 
 interface Video {
   id: string
@@ -16,6 +17,7 @@ interface Video {
   mimeType: string
   size: number
   duration?: number
+  videoUrl?: string
   thumbnail?: string
   status: string
   views: number
@@ -126,8 +128,8 @@ export default function WatchPage() {
         )
     }
 
-    const videoUrl = `/api/videos/${id}/stream`
-    const directVideoUrl = `/uploads/${video?.filename}`
+    const videoUrl = `/api/videos/${id}/stream`  // Always use streaming API to avoid CORS
+    const directVideoUrl = video.videoUrl || `/uploads/${video?.filename}`  // S3 URL as fallback
 
     return (
         <MainLayout>
@@ -135,20 +137,13 @@ export default function WatchPage() {
                 {/* Video Player Section - YouTube style */}
                 <div className="pt-16">
                     <div className="relative w-full h-[56.25vw] max-h-[80vh] bg-black">
-                        <video
-                            controls
-                            className="w-full h-full"
-                            poster={video.thumbnail || '/placeholder-video.svg'}
-                            preload="metadata"
-                            style={{
-                                backgroundColor: '#000',
-                                objectFit: 'contain'
-                            }}
-                        >
-                            <source src={videoUrl} type={video.mimeType} />
-                            <source src={directVideoUrl} type={video.mimeType} />
-                            Your browser does not support the video tag.
-                        </video>
+                        <VideoPlayer
+                            videoUrl={videoUrl}
+                            fallbackUrl={directVideoUrl}
+                            mimeType={video.mimeType}
+                            thumbnail={video.thumbnail}
+                            title={video.title}
+                        />
                     </div>
                 </div>
 

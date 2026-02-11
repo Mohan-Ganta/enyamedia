@@ -6,7 +6,14 @@ export function Footer() {
             <div className="container mx-auto px-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
                     <div>
-                        <h3 className="text-lg font-semibold text-primary mb-4">ENYAMEDIA</h3>
+                        <div className="flex items-center space-x-2 mb-4">
+                            <img 
+                                src="/enya_logo.png" 
+                                alt="EnyaMedia Logo" 
+                                className="w-6 h-6"
+                            />
+                            <h3 className="text-lg font-semibold text-primary">ENYAMEDIA</h3>
+                        </div>
                         <p className="text-sm text-muted-foreground">
                             Bringing classic cinema back to life with modern restoration technology.
                         </p>

@@ -5,6 +5,7 @@ import { readFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import path from 'path'
 import { ObjectId } from 'mongodb'
+import { isS3Configured } from '@/lib/aws-s3'
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -46,7 +47,54 @@ export async function GET(
       )
     }
 
-    // Get file path
+    // If using S3, proxy the video content to avoid CORS issues
+    if (isS3Configured() && video.videoUrl) {
+      try {
+        // Fetch the video from S3
+        const s3Response = await fetch(video.videoUrl, {
+          headers: request.headers.get('range') ? {
+            'Range': request.headers.get('range')!
+          } : {}
+        })
+
+        if (!s3Response.ok) {
+          throw new Error(`S3 fetch failed: ${s3Response.status}`)
+        }
+
+        // Get the response body
+        const body = s3Response.body
+        if (!body) {
+          throw new Error('No response body from S3')
+        }
+
+        // Create response with proper headers
+        const headers = new Headers()
+        headers.set('Content-Type', video.mimeType)
+        headers.set('Access-Control-Allow-Origin', '*')
+        headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+        headers.set('Access-Control-Allow-Headers', 'Range, Content-Type')
+        headers.set('Cache-Control', 'public, max-age=3600')
+
+        // Copy relevant headers from S3 response
+        const contentLength = s3Response.headers.get('content-length')
+        const contentRange = s3Response.headers.get('content-range')
+        const acceptRanges = s3Response.headers.get('accept-ranges')
+
+        if (contentLength) headers.set('Content-Length', contentLength)
+        if (contentRange) headers.set('Content-Range', contentRange)
+        if (acceptRanges) headers.set('Accept-Ranges', acceptRanges)
+
+        return new NextResponse(body, {
+          status: s3Response.status,
+          headers
+        })
+      } catch (error) {
+        console.error('S3 proxy error:', error)
+        // Fall through to local file handling
+      }
+    }
+
+    // Fallback to local file streaming (development only)
     const filePath = path.join(process.cwd(), 'public', 'uploads', video.filename)
     
     if (!existsSync(filePath)) {

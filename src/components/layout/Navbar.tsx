@@ -80,8 +80,15 @@ export function Navbar() {
         >
             <div className="container mx-auto px-4 h-16 flex items-center justify-between">
                 <div className="flex items-center space-x-8">
-                    <Link href="/" className="text-2xl font-bold text-primary tracking-tighter">
-                        ENYAMEDIA
+                    <Link href="/" className="flex items-center space-x-2">
+                        <img 
+                            src="/enya_logo.png" 
+                            alt="EnyaMedia Logo" 
+                            className="w-8 h-8"
+                        />
+                        <span className="text-2xl font-bold text-primary tracking-tighter">
+                            ENYAMEDIA
+                        </span>
                     </Link>
                     <nav className="hidden md:flex items-center space-x-6">
                         <Link href="/" className="text-sm font-medium text-white/90 hover:text-white transition-colors">

@@ -5,6 +5,7 @@ import { Video, User, Activity } from '@/lib/types'
 import { ObjectId } from 'mongodb'
 import fs from 'fs'
 import path from 'path'
+import { deleteFromS3, isS3Configured } from '@/lib/aws-s3'
 
 export async function GET(
   request: NextRequest,
@@ -182,17 +183,31 @@ export async function DELETE(
 
     // Delete video files
     try {
-      if (existingVideo.filename) {
-        const videoPath = path.join(process.cwd(), 'public', 'uploads', existingVideo.filename)
-        if (fs.existsSync(videoPath)) {
-          fs.unlinkSync(videoPath)
+      if (isS3Configured()) {
+        // Delete from S3 using stored keys
+        if (existingVideo.s3Key) {
+          await deleteFromS3(existingVideo.s3Key)
+          console.log('Video deleted from S3:', existingVideo.s3Key)
         }
-      }
 
-      if (existingVideo.thumbnail) {
-        const thumbnailPath = path.join(process.cwd(), 'public', existingVideo.thumbnail)
-        if (fs.existsSync(thumbnailPath)) {
-          fs.unlinkSync(thumbnailPath)
+        if (existingVideo.thumbnailS3Key) {
+          await deleteFromS3(existingVideo.thumbnailS3Key)
+          console.log('Thumbnail deleted from S3:', existingVideo.thumbnailS3Key)
+        }
+      } else {
+        // Delete from local storage (development only)
+        if (existingVideo.filename) {
+          const videoPath = path.join(process.cwd(), 'public', 'uploads', existingVideo.filename)
+          if (fs.existsSync(videoPath)) {
+            fs.unlinkSync(videoPath)
+          }
+        }
+
+        if (existingVideo.thumbnail) {
+          const thumbnailPath = path.join(process.cwd(), 'public', existingVideo.thumbnail)
+          if (fs.existsSync(thumbnailPath)) {
+            fs.unlinkSync(thumbnailPath)
+          }
         }
       }
     } catch (fileError) {

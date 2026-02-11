@@ -19,7 +19,10 @@ export interface Video {
   mimeType: string
   size: number
   duration?: number
+  videoUrl?: string // S3 URL or local path for video file
+  s3Key?: string // S3 key for easy deletion
   thumbnail?: string
+  thumbnailS3Key?: string // S3 key for thumbnail
   status: 'PROCESSING' | 'READY' | 'FAILED' | 'DELETED'
   views: number
   likes: number
