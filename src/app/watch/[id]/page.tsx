@@ -3,10 +3,13 @@
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Plus, Share2, ThumbsUp } from 'lucide-react'
+import { Share2, ThumbsUp, Heart, Bookmark, BookmarkCheck } from 'lucide-react'
 import { MovieCard } from '@/components/movies/MovieCard'
 import { MainLayout } from '@/components/layout/MainLayout'
 import VideoPlayer from '@/components/VideoPlayer'
+import Comments from '@/components/Comments'
+import ShareModal from '@/components/ShareModal'
+import { useAuth } from '@/hooks/useAuth'
 
 interface Video {
   id: string
@@ -48,10 +51,15 @@ interface RelatedVideo {
 export default function WatchPage() {
     const params = useParams()
     const id = params.id as string
+    const { user, isAuthenticated } = useAuth()
     const [video, setVideo] = useState<Video | null>(null)
     const [relatedVideos, setRelatedVideos] = useState<RelatedVideo[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
+    const [isLiked, setIsLiked] = useState(false)
+    const [isSaved, setIsSaved] = useState(false)
+    const [showShareModal, setShowShareModal] = useState(false)
+    const [showLoginPrompt, setShowLoginPrompt] = useState(false)
 
     useEffect(() => {
         if (!id) return
@@ -85,9 +93,33 @@ export default function WatchPage() {
             }
         }
 
+        const checkUserInteractions = async () => {
+            if (!isAuthenticated) return
+            
+            try {
+                const [likeResponse, saveResponse] = await Promise.all([
+                    fetch(`/api/videos/${id}/like`),
+                    fetch(`/api/videos/${id}/save`)
+                ])
+                
+                if (likeResponse.ok) {
+                    const likeData = await likeResponse.json()
+                    setIsLiked(likeData.liked)
+                }
+                
+                if (saveResponse.ok) {
+                    const saveData = await saveResponse.json()
+                    setIsSaved(saveData.saved)
+                }
+            } catch (error) {
+                console.error('Failed to check user interactions:', error)
+            }
+        }
+
         fetchVideo()
         fetchRelatedVideos()
-    }, [id])
+        checkUserInteractions()
+    }, [id, isAuthenticated])
 
     const formatDuration = (seconds?: number): string => {
         if (!seconds) return 'N/A'
@@ -97,6 +129,69 @@ export default function WatchPage() {
             return `${hours}h ${minutes}m`
         }
         return `${minutes}m`
+    }
+
+    const handleLike = async () => {
+        if (!isAuthenticated) {
+            setShowLoginPrompt(true)
+            return
+        }
+
+        try {
+            const response = await fetch(`/api/videos/${id}/like`, {
+                method: 'POST'
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                setIsLiked(data.liked)
+                // Update video likes count
+                if (video) {
+                    setVideo({
+                        ...video,
+                        likes: video.likes + (data.liked ? 1 : -1)
+                    })
+                }
+            } else {
+                const error = await response.json()
+                alert(error.error || 'Please login to like videos')
+            }
+        } catch (error) {
+            console.error('Like failed:', error)
+            alert('Failed to like video')
+        }
+    }
+
+    const handleSave = async () => {
+        if (!isAuthenticated) {
+            setShowLoginPrompt(true)
+            return
+        }
+
+        try {
+            const response = await fetch(`/api/videos/${id}/save`, {
+                method: 'POST'
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                setIsSaved(data.saved)
+            } else {
+                const error = await response.json()
+                alert(error.error || 'Please login to save videos')
+            }
+        } catch (error) {
+            console.error('Save failed:', error)
+            alert('Failed to save video')
+        }
+    }
+
+    const handleShare = () => {
+        if (!isAuthenticated) {
+            setShowLoginPrompt(true)
+            return
+        }
+        setShowShareModal(true)
     }
 
     if (loading) {
@@ -129,7 +224,6 @@ export default function WatchPage() {
     }
 
     const videoUrl = `/api/videos/${id}/stream`  // Always use streaming API to avoid CORS
-    const directVideoUrl = video.videoUrl || `/uploads/${video?.filename}`  // S3 URL as fallback
 
     return (
         <MainLayout>
@@ -139,10 +233,10 @@ export default function WatchPage() {
                     <div className="relative w-full h-[56.25vw] max-h-[80vh] bg-black">
                         <VideoPlayer
                             videoUrl={videoUrl}
-                            fallbackUrl={directVideoUrl}
                             mimeType={video.mimeType}
                             thumbnail={video.thumbnail}
                             title={video.title}
+                            videoId={id}
                         />
                     </div>
                 </div>
@@ -162,20 +256,54 @@ export default function WatchPage() {
 
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex gap-3">
-                                <Button className="bg-white text-black hover:bg-gray-200 gap-2 rounded-full px-6">
-                                    <ThumbsUp className="w-4 h-4" />
+                                <Button 
+                                    onClick={handleLike}
+                                    className={`gap-2 rounded-full px-6 transition-colors ${
+                                        isLiked 
+                                            ? 'bg-red-600 text-white hover:bg-red-700' 
+                                            : 'bg-white text-black hover:bg-gray-200'
+                                    }`}
+                                >
+                                    {isLiked ? <Heart className="w-4 h-4 fill-current" /> : <ThumbsUp className="w-4 h-4" />}
                                     {video.likes.toLocaleString()}
                                 </Button>
-                                <Button variant="outline" className="border-gray-600 text-white hover:bg-gray-800 gap-2 rounded-full px-6">
+                                <Button 
+                                    onClick={handleShare}
+                                    variant="outline" 
+                                    className="border-gray-600 text-white hover:bg-gray-800 gap-2 rounded-full px-6"
+                                >
                                     <Share2 className="w-4 h-4" />
                                     Share
                                 </Button>
-                                <Button variant="outline" className="border-gray-600 text-white hover:bg-gray-800 gap-2 rounded-full px-6">
-                                    <Plus className="w-4 h-4" />
-                                    Save
+                                <Button 
+                                    onClick={handleSave}
+                                    variant="outline" 
+                                    className={`border-gray-600 gap-2 rounded-full px-6 transition-colors ${
+                                        isSaved 
+                                            ? 'bg-blue-600 text-white hover:bg-blue-700 border-blue-600' 
+                                            : 'text-white hover:bg-gray-800'
+                                    }`}
+                                >
+                                    {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                                    {isSaved ? 'Saved' : 'Save'}
                                 </Button>
                             </div>
                         </div>
+
+                        {/* Login Prompt */}
+                        {showLoginPrompt && (
+                            <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-6">
+                                <p className="text-yellow-200 text-sm">
+                                    Please <a href="/login" className="text-yellow-400 hover:underline">login</a> to like, save, and share videos.
+                                </p>
+                                <Button
+                                    onClick={() => setShowLoginPrompt(false)}
+                                    className="mt-2 text-xs bg-transparent text-yellow-400 hover:bg-yellow-900/20 px-2 py-1"
+                                >
+                                    Dismiss
+                                </Button>
+                            </div>
+                        )}
 
                         {/* Video Details */}
                         <div className="bg-gray-900 rounded-xl p-4 mb-6">
@@ -197,6 +325,9 @@ export default function WatchPage() {
                                 <p>Uploaded by: <span className="text-white">{video.uploader.name}</span></p>
                             </div>
                         </div>
+
+                        {/* Comments Section */}
+                        <Comments videoId={id} />
                     </div>
 
                     {/* Right Column - Registration Showcase */}
@@ -318,6 +449,14 @@ export default function WatchPage() {
                 </div>
             </div>
         </div>
+        
+        {/* Share Modal */}
+        <ShareModal
+            isOpen={showShareModal}
+            onClose={() => setShowShareModal(false)}
+            videoId={id}
+            videoTitle={video.title}
+        />
         </MainLayout>
     )
 }

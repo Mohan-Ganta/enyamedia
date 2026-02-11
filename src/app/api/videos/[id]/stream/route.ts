@@ -50,14 +50,21 @@ export async function GET(
     // If using S3, proxy the video content to avoid CORS issues
     if (isS3Configured() && video.videoUrl) {
       try {
+        // For S3 URLs, we need to handle range requests properly
+        const rangeHeader = request.headers.get('range')
+        const fetchHeaders: HeadersInit = {}
+        
+        if (rangeHeader) {
+          fetchHeaders['Range'] = rangeHeader
+        }
+
         // Fetch the video from S3
         const s3Response = await fetch(video.videoUrl, {
-          headers: request.headers.get('range') ? {
-            'Range': request.headers.get('range')!
-          } : {}
+          headers: fetchHeaders
         })
 
         if (!s3Response.ok) {
+          console.error(`S3 fetch failed: ${s3Response.status} ${s3Response.statusText}`)
           throw new Error(`S3 fetch failed: ${s3Response.status}`)
         }
 
@@ -69,7 +76,7 @@ export async function GET(
 
         // Create response with proper headers
         const headers = new Headers()
-        headers.set('Content-Type', video.mimeType)
+        headers.set('Content-Type', video.mimeType || 'video/mp4')
         headers.set('Access-Control-Allow-Origin', '*')
         headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
         headers.set('Access-Control-Allow-Headers', 'Range, Content-Type')
@@ -84,13 +91,20 @@ export async function GET(
         if (contentRange) headers.set('Content-Range', contentRange)
         if (acceptRanges) headers.set('Accept-Ranges', acceptRanges)
 
+        // Determine status code
+        const status = rangeHeader && s3Response.status === 206 ? 206 : 200
+
         return new NextResponse(body, {
-          status: s3Response.status,
+          status,
           headers
         })
       } catch (error) {
         console.error('S3 proxy error:', error)
-        // Fall through to local file handling
+        // Return error response instead of falling through
+        return NextResponse.json(
+          { error: 'Failed to stream video from S3' },
+          { status: 500 }
+        )
       }
     }
 

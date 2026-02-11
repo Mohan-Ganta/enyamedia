@@ -56,5 +56,6 @@ export async function getCollection(name: string): Promise<Collection> {
 export const Collections = {
   USERS: 'users',
   VIDEOS: 'videos',
-  ACTIVITIES: 'activities'
+  ACTIVITIES: 'activities',
+  COMMENTS: 'comments'
 } as const

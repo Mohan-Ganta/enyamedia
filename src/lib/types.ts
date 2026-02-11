@@ -6,6 +6,8 @@ export interface User {
   password: string
   name: string
   role: 'USER' | 'ADMIN' | 'SUPER_ADMIN'
+  likedVideos?: string[] // Array of video IDs
+  savedVideos?: string[] // Array of video IDs
   createdAt: Date
   updatedAt: Date
 }
@@ -43,6 +45,17 @@ export interface Activity {
   videoId?: ObjectId
   metadata?: string
   createdAt: Date
+}
+
+export interface Comment {
+  _id?: ObjectId
+  videoId: ObjectId
+  userId: ObjectId
+  content: string
+  createdAt: Date
+  updatedAt: Date
+  likes: number
+  replies?: Comment[]
 }
 
 // API Response types

@@ -45,6 +45,8 @@ export async function GET(
       _id: video._id!.toString(),
       uploadedBy: video.uploadedBy.toString(),
       views: video.views + 1, // Return updated view count
+      // Don't expose direct S3 URL to avoid CORS issues
+      videoUrl: undefined,
       uploader: uploader ? {
         id: uploader._id!.toString(),
         name: uploader.name,
@@ -135,6 +137,8 @@ export async function PUT(
       ...updatedVideo,
       _id: updatedVideo._id!.toString(),
       uploadedBy: updatedVideo.uploadedBy.toString(),
+      // Don't expose direct S3 URL to avoid CORS issues
+      videoUrl: undefined,
       uploader: uploader ? {
         id: uploader._id!.toString(),
         name: uploader.name,

@@ -118,11 +118,11 @@ export default function LoginPage() {
                     </div>
                 </form>
 
-                <div className="mt-8 text-center">
+                {/* <div className="mt-8 text-center">
                     <div className="text-zinc-400 text-sm">
                         Admin? <Link href="/admin/login" className="text-primary hover:underline">Admin Login</Link>
                     </div>
-                </div>
+                </div> */}
 
                 <div className="mt-8 text-zinc-400">
                     New to EnyaMedia? <Link href="/signup" className="text-white hover:underline">Sign up now.</Link>
